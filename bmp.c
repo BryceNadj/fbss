@@ -99,6 +99,10 @@ void write_dib_header(fb_data_t *fb_data, char out[DIB_HEADER_SIZE]) {
 }
 
 void write_px_data(fb_data_t *fb_data, char *fbp, char *out) {
+    // pixel data is stored upside down in bmp files
+    // i.e., pixel at framebuffer[0,0] = bmp[0,height]
+    // we need to flip the framebuffer contents upside down before writing them
+    // to the file
     int height = fb_data->height;
     int width = fb_data->line_length;
     int cur_ptr;
@@ -160,7 +164,8 @@ char *fb_init(fb_data_t *fb_data) {
     fb_data->line_length = finfo.line_length;
     fb_data->screensize = finfo.line_length * vinfo.yres;
 
-    char *fbp = (char *)mmap(0, fb_data->screensize, PROT_READ, MAP_SHARED, fd, 0);
+    char *fbp =
+        (char *)mmap(0, fb_data->screensize, PROT_READ, MAP_SHARED, fd, 0);
 
     if (fbp == MAP_FAILED) {
         perror("Failed to mmap framebuffer device");
