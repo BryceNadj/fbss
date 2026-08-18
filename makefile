@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -MMD -MP
 OBJS := bmp.o
-NAME := bmp
+NAME := fbss
 
 # Link
 $(NAME): $(OBJS)
