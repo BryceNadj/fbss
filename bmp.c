@@ -46,16 +46,12 @@ int main(int argc, const char *argv[]) {
         puts("Oopsie");
         return 1;
     }
-    puts("Framebuffer open");
 
     int total_size = HEADER_SIZE + DIB_HEADER_SIZE + fb_data.screensize;
     char *bmp = malloc(total_size);
 
-    puts("Writing header...");
+    puts("Writing headers...");
     write_bmp_header(&fb_data, bmp);
-    printf("bmp data: %s\n", bmp);
-
-    puts("Writing DIB Header...");
     write_dib_header(&fb_data, bmp);
 
     puts("Writing PX data...");
@@ -79,7 +75,6 @@ void write_bmp_header(fb_data_t *fb_data, char out[HEADER_SIZE]) {
     // 14 - header +
     // 40 - DIB header +
     // screensize
-    // (get addr of out[2] -> cast to int ptr -> deref)
     write_bytes(out, OFF_FILE_SIZE, PX_DATA_OFFSET + fb_data->screensize, 4);
     write_bytes(out, OFF_PX_ARR, PX_DATA_OFFSET, 4);
 }
@@ -114,8 +109,6 @@ void write_px_data(fb_data_t *fb_data, char *fbp, char *out) {
 }
 
 int create_write_file(char *bmp, int size) {
-    // rx-rx-rx-
-    // mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     char path[] = "./output/img.bmp";
 
     int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0666);
@@ -125,7 +118,7 @@ int create_write_file(char *bmp, int size) {
 
     ssize_t bytes_written = write(fd, bmp, size);
     if (bytes_written == -1) {
-        perror("write");
+        perror("Error writing");
         close(fd);
         return 1;
     }
@@ -167,8 +160,7 @@ char *fb_init(fb_data_t *fb_data) {
     fb_data->line_length = finfo.line_length;
     fb_data->screensize = finfo.line_length * vinfo.yres;
 
-    char *fbp =
-        (char *)mmap(0, fb_data->screensize, PROT_READ, MAP_SHARED, fd, 0);
+    char *fbp = (char *)mmap(0, fb_data->screensize, PROT_READ, MAP_SHARED, fd, 0);
 
     if (fbp == MAP_FAILED) {
         perror("Failed to mmap framebuffer device");
