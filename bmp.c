@@ -1,10 +1,13 @@
 #include <fcntl.h>
+#include <limits.h>
 #include <linux/fb.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "bmp.h"
@@ -39,7 +42,7 @@ void write_bytes(char *buf, int offset, int data, int num_bytes);
 int create_write_file(char *data, int size);
 
 int main(int argc, const char *argv[]) {
-    puts("Opening framebuffer...");
+    // puts("Opening framebuffer...");
     fb_data_t fb_data;
     char *fbp = fb_init(&fb_data);
     if (fbp == NULL) {
@@ -50,16 +53,18 @@ int main(int argc, const char *argv[]) {
     int total_size = HEADER_SIZE + DIB_HEADER_SIZE + fb_data.screensize;
     char *bmp = malloc(total_size);
 
-    puts("Writing headers...");
+    // puts("Writing headers...");
     write_bmp_header(&fb_data, bmp);
     write_dib_header(&fb_data, bmp);
 
-    puts("Writing PX data...");
+    // puts("Writing PX data...");
     write_px_data(&fb_data, fbp, bmp);
 
-    puts("Creating file...");
-    create_write_file(bmp, total_size);
-    printf("File has been created/written to: %d bytes\n", total_size);
+    // puts("Creating file...");
+    if (create_write_file(bmp, total_size) != 0)
+        puts("Error creating/writing to file");
+    // else
+    //     printf("File has been created/written to: %d bytes\n", total_size);
 
     free(bmp);
     unmap_close(fbp, fb_data.screensize, fb_data.fd);
@@ -113,11 +118,19 @@ void write_px_data(fb_data_t *fb_data, char *fbp, char *out) {
 }
 
 int create_write_file(char *bmp, int size) {
-    char path[] = "./output/img.bmp";
+    // construct pictures directory
+    const char *sudo_user = getenv("SUDO_USER");
+    struct passwd *pw = getpwnam(sudo_user);
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/Pictures/img.bmp", pw->pw_dir);
+
+    // printf("Opening: %s\n", path);
+    // int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0666);
 
     int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0666);
     if (fd == -1) {
         perror("Error creating file");
+        return 1;
     }
 
     ssize_t bytes_written = write(fd, bmp, size);
