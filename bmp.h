@@ -22,5 +22,10 @@
 #define OFF_PALETTE_COLS 0x2E
 #define OFF_IMPORTANT_COLS 0x32
 
+#define DIR_MODE 0775
+#define FILE_MODE 0666
+#define MAX_FNAME_SIZE 255
+
+typedef struct dirent dirent;
 
 #endif // BMP_H
