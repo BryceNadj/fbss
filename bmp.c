@@ -1,20 +1,27 @@
+#include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <linux/fb.h>
+#include <linux/limits.h>
 #include <pwd.h>
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "bmp.h"
-// #include "shm.h"
 
 #define HEADER_SIZE 14
 #define DIB_HEADER_SIZE 40
+
+#define TRUE 1
+#define FALSE 0
 
 typedef struct fb_var_screeninfo fb_var_screeninfo;
 typedef struct fb_fix_screeninfo fb_fix_screeninfo;
@@ -117,34 +124,75 @@ void write_px_data(fb_data_t *fb_data, char *fbp, char *out) {
     }
 }
 
+int dir_contains_file(dirent **dir, char *s, int size) {
+    for (int i = 0; i < size; i++)
+        if (strcmp(dir[i]->d_name, s) == 0)
+            return TRUE;
+
+    return FALSE;
+}
+
 int create_write_file(char *bmp, int size) {
-    // construct pictures directory
+
+    // construct directory
+    char path[PATH_MAX];
     const char *sudo_user = getenv("SUDO_USER");
     struct passwd *pw = getpwnam(sudo_user);
-    char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/Pictures/img.bmp", pw->pw_dir);
 
-    // printf("Opening: %s\n", path);
-    // int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+    // set uid of calling process to user
+    if (setuid(pw->pw_uid) == -1) {
+        perror("setuid");
+        return EXIT_FAILURE;
+    }
 
-    int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+    // make fbss dir
+    snprintf(path, sizeof(path), "%s/Pictures/fbss/", pw->pw_dir);
+    if (mkdir(path, DIR_MODE) == -1) {
+        if (errno != EEXIST) {
+            perror("mkdir");
+            return EXIT_FAILURE;
+        }
+        // mkdir failed bc folder exists, no error
+    }
+
+    dirent **entries;
+    int n = (scandir(path, &entries, NULL, alphasort));
+    if (n == -1) {
+        perror("scandir");
+        return EXIT_FAILURE;
+    }
+
+    int name_found = TRUE;
+    char name_attempt[MAX_FNAME_SIZE];
+    for (int i = 0; name_found == TRUE; i++) {
+        snprintf(name_attempt, MAX_FNAME_SIZE, "img%d.bmp", i);
+        name_found = dir_contains_file(entries, name_attempt, n);
+    }
+
+    while (n--) {
+        free(entries[n]);
+    }
+    free(entries);
+
+    snprintf(path, sizeof(path), "%s/Pictures/fbss/%s", pw->pw_dir, name_attempt);
+    int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, FILE_MODE);
     if (fd == -1) {
         perror("Error creating file");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     ssize_t bytes_written = write(fd, bmp, size);
     if (bytes_written == -1) {
         perror("Error writing");
         close(fd);
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (close(fd) == -1) {
         perror("Error closing file");
-        return 1;
+        return EXIT_FAILURE;
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 char *fb_init(fb_data_t *fb_data) {
